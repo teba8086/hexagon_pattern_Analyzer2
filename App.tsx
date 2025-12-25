@@ -8,6 +8,7 @@ import {
 import { 
   dateToJDN, 
   parseEclipseDate, 
+  formatFullDate
 } from './utils';
 import { 
   DEFAULT_TARGET_DISTANCES, 
@@ -31,7 +32,6 @@ const App: React.FC = () => {
   const detailsContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // CSV 파싱 및 데이터 설정
   const processCSV = useCallback((csvText: string) => {
     setIsLoading(true);
     const lines = csvText.split(/\r?\n/);
@@ -65,7 +65,7 @@ const App: React.FC = () => {
     results.sort((a, b) => a.jdn - b.jdn);
     dataRef.current = results;
     setData(results);
-    setPatterns([]); // 데이터 변경 시 기존 패턴 초기화
+    setPatterns([]); 
     setSelectedPattern(null);
     setIsLoading(false);
     return results;
@@ -83,13 +83,56 @@ const App: React.FC = () => {
       }
     };
     reader.readAsText(file);
+    if (e.target) e.target.value = '';
   };
 
   const triggerFileUpload = () => {
     fileInputRef.current?.click();
   };
 
-  // 대칭 패턴 찾기 로직
+  const downloadResultsCSV = () => {
+    if (patterns.length === 0) return;
+
+    const headers = [
+      "Pattern ID", "Center Date", "Center Type",
+      "Pair A (L Date)", "Pair A (R Date)", "Pair A (Avg Dist)",
+      "Pair B (L Date)", "Pair B (R Date)", "Pair B (Avg Dist)",
+      "Pair C (L Date)", "Pair C (R Date)", "Pair C (Avg Dist)",
+      "Pair D (L Date)", "Pair D (R Date)", "Pair D (Avg Dist)"
+    ];
+
+    const rows = patterns.map((p, idx) => {
+      const row = [
+        `#${idx + 1}`,
+        formatFullDate(p.center),
+        p.center.category
+      ];
+
+      // 4개의 쌍(Pair A-D)을 고정적으로 출력
+      for (let i = 0; i < 4; i++) {
+        const pair = p.pairs[i];
+        if (pair) {
+          row.push(formatFullDate(pair.left));
+          row.push(formatFullDate(pair.right));
+          row.push(pair.averageDistance.toFixed(1));
+        } else {
+          row.push("", "", "");
+        }
+      }
+      return row.join(",");
+    });
+
+    const csvContent = "\ufeff" + [headers.join(","), ...rows].join("\n");
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `eclipse_patterns_v1.5.0_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const findPatterns = useCallback(async () => {
     const currentData = dataRef.current;
     if (currentData.length === 0) return;
@@ -179,7 +222,6 @@ const App: React.FC = () => {
     setIsLoading(false);
   }, []);
 
-  // 초기 실행: 기본 데이터 로드
   useEffect(() => {
     if (DEFAULT_CSV_DATA) {
       processCSV(DEFAULT_CSV_DATA);
@@ -208,7 +250,7 @@ const App: React.FC = () => {
                 <h1 className="text-xl font-bold text-gray-100">천체 대칭 분석기 (Celestial Hexagon)</h1>
                 <span className="px-2 py-0.5 bg-gray-800 text-emerald-500 text-[10px] font-black rounded border border-gray-700">{APP_VERSION}</span>
               </div>
-              <p className="text-[10px] text-emerald-500 font-mono uppercase tracking-[0.2em]">CSV Upload & Symmetry Analysis</p>
+              <p className="text-[10px] text-emerald-500 font-mono uppercase tracking-[0.2em]">External CSV Data Analysis</p>
             </div>
           </div>
 
@@ -222,16 +264,25 @@ const App: React.FC = () => {
             />
             <button 
               onClick={triggerFileUpload}
-              className="px-4 py-3 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-xl text-sm transition font-bold text-gray-300"
+              className="px-4 py-3 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-xl text-sm transition font-bold text-gray-300 flex items-center gap-2"
             >
-              CSV 파일 업로드
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+              CSV 업로드
             </button>
             <button 
               onClick={findPatterns}
               disabled={data.length === 0 || isLoading}
-              className="px-8 py-3 bg-emerald-600 hover:bg-emerald-500 disabled:bg-gray-800 disabled:text-gray-600 border border-emerald-500/50 rounded-xl text-sm transition font-black shadow-[0_0_20px_rgba(16,185,129,0.3)]"
+              className="px-6 py-3 bg-emerald-600 hover:bg-emerald-500 disabled:bg-gray-800 disabled:text-gray-600 border border-emerald-500/50 rounded-xl text-sm transition font-black shadow-[0_0_20px_rgba(16,185,129,0.3)]"
             >
-              {isLoading ? `${searchProgress}% 분석 중...` : '육각도형 분석 실행'}
+              {isLoading ? `${searchProgress}% 분석 중...` : '분석 실행'}
+            </button>
+            <button 
+              onClick={downloadResultsCSV}
+              disabled={patterns.length === 0 || isLoading}
+              className="px-6 py-3 bg-gray-800 hover:bg-gray-700 border border-emerald-500/30 disabled:border-gray-800 disabled:text-gray-600 rounded-xl text-sm transition font-bold text-emerald-500 flex items-center gap-2"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+              결과 다운로드
             </button>
           </div>
         </div>
@@ -264,11 +315,11 @@ const App: React.FC = () => {
                      </svg>
                   </div>
                </div>
-               <h3 className="text-2xl font-black text-gray-400">데이터 업로드 또는 분석 대기</h3>
+               <h3 className="text-2xl font-black text-gray-400">데이터를 업로드하고 분석을 시작하세요</h3>
                <p className="text-gray-600 mt-4 max-w-sm mx-auto text-sm leading-relaxed">
                  {data.length > 0 
-                    ? "상단의 '육각도형 분석 실행' 버튼을 누르시면 업로드된 천체 데이터를 분석하여 대칭 패턴을 찾아냅니다."
-                    : "분석할 CSV 파일을 업로드해 주세요. (날짜, 종류, 구분 형식)"
+                    ? "상단의 '분석 실행' 버튼을 누르시면 대칭 패턴을 찾아냅니다."
+                    : "엑셀이나 CSV 파일을 업로드해 주세요. (날짜, 종류, 구분 형식)"
                  }
                </p>
             </div>
