@@ -29,6 +29,7 @@ const App: React.FC = () => {
   
   const dataRef = useRef<EclipseEvent[]>([]);
   const detailsContainerRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // CSV 파싱 및 데이터 설정
   const processCSV = useCallback((csvText: string) => {
@@ -64,9 +65,29 @@ const App: React.FC = () => {
     results.sort((a, b) => a.jdn - b.jdn);
     dataRef.current = results;
     setData(results);
+    setPatterns([]); // 데이터 변경 시 기존 패턴 초기화
+    setSelectedPattern(null);
     setIsLoading(false);
     return results;
   }, []);
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result;
+      if (typeof text === 'string') {
+        processCSV(text);
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const triggerFileUpload = () => {
+    fileInputRef.current?.click();
+  };
 
   // 대칭 패턴 찾기 로직
   const findPatterns = useCallback(async () => {
@@ -165,7 +186,6 @@ const App: React.FC = () => {
     }
   }, [processCSV]);
 
-  // 패턴 선택 시 상세 컨테이너를 상단으로 스크롤 (UX 해결책)
   const handleSelectPattern = useCallback((p: HexagonalPattern) => {
     setSelectedPattern(p);
     if (detailsContainerRef.current) {
@@ -178,55 +198,47 @@ const App: React.FC = () => {
       <header className="bg-gray-900 border-b border-gray-800 p-4 shrink-0 z-50 shadow-lg">
         <div className="container mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="bg-emerald-600 p-2 rounded-lg shadow-xl">
+            <div className="bg-emerald-600 p-2 rounded-lg shadow-xl ring-1 ring-emerald-400/30">
               <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z" />
               </svg>
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-xl font-bold text-gray-100">천체 대칭 분석기 (Celestial Symmetry)</h1>
+                <h1 className="text-xl font-bold text-gray-100">천체 대칭 분석기 (Celestial Hexagon)</h1>
                 <span className="px-2 py-0.5 bg-gray-800 text-emerald-500 text-[10px] font-black rounded border border-gray-700">{APP_VERSION}</span>
               </div>
-              <p className="text-[10px] text-emerald-500 font-mono uppercase tracking-[0.2em]">6,000년 일월식 통합 분석 (BC 4000 ~ AD 2100)</p>
+              <p className="text-[10px] text-emerald-500 font-mono uppercase tracking-[0.2em]">CSV Upload & Symmetry Analysis</p>
             </div>
           </div>
 
           <div className="flex gap-2">
+            <input 
+              type="file" 
+              ref={fileInputRef} 
+              onChange={handleFileUpload} 
+              className="hidden" 
+              accept=".csv,.txt"
+            />
             <button 
-              onClick={() => {
-                const fileInput = document.createElement('input');
-                fileInput.type = 'file';
-                fileInput.onchange = (e: any) => {
-                  const file = e.target.files[0];
-                  const reader = new FileReader();
-                  reader.onload = (evt) => {
-                    if (evt.target?.result) {
-                      processCSV(evt.target.result as string);
-                    }
-                  };
-                  reader.readAsText(file);
-                };
-                fileInput.click();
-              }}
-              className="px-4 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-xs transition font-semibold"
+              onClick={triggerFileUpload}
+              className="px-4 py-3 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-xl text-sm transition font-bold text-gray-300"
             >
-              CSV 직접 업로드
+              CSV 파일 업로드
             </button>
             <button 
               onClick={findPatterns}
               disabled={data.length === 0 || isLoading}
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-gray-800 disabled:text-gray-600 border border-emerald-500/50 rounded-lg text-xs transition font-bold shadow-lg"
+              className="px-8 py-3 bg-emerald-600 hover:bg-emerald-500 disabled:bg-gray-800 disabled:text-gray-600 border border-emerald-500/50 rounded-xl text-sm transition font-black shadow-[0_0_20px_rgba(16,185,129,0.3)]"
             >
-              {isLoading ? `${searchProgress}% 분석 중...` : '육각도형 분석 실행 (Analyze)'}
+              {isLoading ? `${searchProgress}% 분석 중...` : '육각도형 분석 실행'}
             </button>
           </div>
         </div>
       </header>
 
       <main className="flex-1 container mx-auto p-4 flex flex-col lg:flex-row gap-6 overflow-hidden">
-        {/* 왼쪽 사이드바 (패턴 목록) */}
-        <div className="lg:w-[350px] flex flex-col gap-4 h-full overflow-hidden shrink-0">
+        <div className="lg:w-[380px] flex flex-col gap-4 h-full overflow-hidden shrink-0">
           <Dashboard 
             eventCount={data.length} 
             patternCount={patterns.length}
@@ -236,27 +248,27 @@ const App: React.FC = () => {
           />
         </div>
 
-        {/* 오른쪽 상세 영역 (상세 보기 컨테이너) */}
         <div 
           ref={detailsContainerRef}
-          className="flex-1 overflow-y-auto pr-2 scroll-smooth bg-gray-900/30 rounded-2xl border border-gray-800/50"
+          className="flex-1 overflow-y-auto pr-1 scroll-smooth bg-black/20 rounded-3xl border border-gray-800/30"
         >
           {selectedPattern ? (
             <PatternDetails pattern={selectedPattern} />
           ) : (
             <div className="h-full flex flex-col items-center justify-center p-10 text-center">
-               <div className="w-20 h-20 bg-gray-800/50 rounded-3xl flex items-center justify-center mb-6 border border-gray-700">
-                  <svg className="w-10 h-10 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                  </svg>
+               <div className="relative mb-10">
+                  <div className="absolute inset-0 bg-emerald-500/20 blur-3xl rounded-full"></div>
+                  <div className="w-24 h-24 bg-gray-900 rounded-3xl flex items-center justify-center border border-gray-800 relative z-10">
+                     <svg className="w-12 h-12 text-emerald-500/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                     </svg>
+                  </div>
                </div>
-               <h3 className="text-xl font-bold text-gray-400">분석된 패턴을 선택해 주세요</h3>
-               <p className="text-gray-600 mt-4 max-w-sm mx-auto text-sm">
+               <h3 className="text-2xl font-black text-gray-400">데이터 업로드 또는 분석 대기</h3>
+               <p className="text-gray-600 mt-4 max-w-sm mx-auto text-sm leading-relaxed">
                  {data.length > 0 
-                    ? patterns.length > 0 
-                      ? "왼쪽 목록에서 패턴을 클릭하면 상세한 기하학적 대칭 구조가 나타납니다." 
-                      : "'분석 실행' 버튼을 눌러 육각도형 패턴을 찾아보세요."
-                    : "데이터가 로드되지 않았습니다."
+                    ? "상단의 '육각도형 분석 실행' 버튼을 누르시면 업로드된 천체 데이터를 분석하여 대칭 패턴을 찾아냅니다."
+                    : "분석할 CSV 파일을 업로드해 주세요. (날짜, 종류, 구분 형식)"
                  }
                </p>
             </div>
